@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Clip, Meeting } from '../types.ts';
 import type { Focus } from '../App.tsx';
 import { fmt, fmtDate, fmtDur } from '../util.ts';
@@ -7,6 +7,7 @@ import Minutes from './Minutes.tsx';
 import Catchup from './Catchup.tsx';
 import Transcript from './Transcript.tsx';
 import { Avatars, Spinner } from './bits.tsx';
+import Player from './Player.tsx';
 
 type Tab = 'summary' | 'catchup' | 'transcript';
 const TABS: [Tab, string][] = [['summary', 'Summary'], ['catchup', 'Catch-up'], ['transcript', 'Transcript']];
@@ -34,6 +35,9 @@ export default function CallView({ meeting: m, claude, focus, onBack, onSummariz
   const [tab, setTabState] = useState<Tab>(focus ? 'transcript' : readTab);
   const [jump, setJump] = useState<Focus | null>(focus);
   const [confirmDel, setConfirmDel] = useState(false);
+  const media = useRef<HTMLMediaElement>(null);
+  const [now, setNow] = useState<number | null>(null);
+  const onTime = useCallback((t: number | null) => setNow(t), []);
 
   useEffect(() => { if (focus) { setTabState('transcript'); setJump(focus); } }, [focus]);
 
@@ -41,7 +45,12 @@ export default function CallView({ meeting: m, claude, focus, onBack, onSummariz
     setTabState(t);
     try { localStorage.setItem('f.tab', t); } catch { /* storage blocked */ }
   };
-  const onJump = (t: number) => { setTabState('transcript'); setJump({ t, nonce: Date.now() }); };
+  // Jumping moves the recording (when attached) and the transcript to the same moment.
+  const onJump = (t: number) => {
+    if (media.current) { media.current.currentTime = t; media.current.play().catch(() => {}); }
+    setTabState('transcript');
+    setJump({ t, nonce: Date.now() });
+  };
 
   const summarizing = m.status === 'summarizing';
   const s = m.summary;
@@ -100,7 +109,9 @@ export default function CallView({ meeting: m, claude, focus, onBack, onSummariz
         )}
       </header>
 
-      <Timeline meeting={m} onJump={onJump} />
+      <Player ref={media} meetingId={m.id} onTime={onTime} say={say} />
+
+      <Timeline meeting={m} onJump={onJump} now={now} />
 
       <nav className="tabs" role="tablist">
         {TABS.map(([k, label]) => (
@@ -111,7 +122,7 @@ export default function CallView({ meeting: m, claude, focus, onBack, onSummariz
       <div>
         {tab === 'summary' && (s ? <Minutes meeting={m} onJump={onJump} onToggle={onToggle} /> : status)}
         {tab === 'catchup' && <Catchup meeting={m} onJump={onJump} status={s ? null : status} />}
-        {tab === 'transcript' && <Transcript meeting={m} jump={jump} onClipSaved={onClipSaved} say={say} />}
+        {tab === 'transcript' && <Transcript meeting={m} jump={jump} now={now} onClipSaved={onClipSaved} say={say} />}
       </div>
     </>
   );

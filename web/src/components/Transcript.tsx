@@ -5,15 +5,24 @@ import { api } from '../api.ts';
 import { fmt, lineEnd } from '../util.ts';
 import { Highlight, SearchIcon, speakerColor } from './bits.tsx';
 
-interface Props { meeting: Meeting; jump: Focus | null; onClipSaved: (c: Clip) => void; say: (msg: string) => void }
+interface Props { meeting: Meeting; jump: Focus | null; now?: number | null; onClipSaved: (c: Clip) => void; say: (msg: string) => void }
 
-export default function Transcript({ meeting: m, jump, onClipSaved, say }: Props) {
+export default function Transcript({ meeting: m, jump, now = null, onClipSaved, say }: Props) {
   const [q, setQ] = useState('');
   const [clipMode, setClipMode] = useState(false);
   const [sel, setSel] = useState<[number, number | null] | null>(null);
   const [clipTitle, setClipTitle] = useState('');
   const listRef = useRef<HTMLDivElement>(null);
   const lines = m.lines;
+  const [follow, setFollow] = useState(true);
+
+  // The line being spoken at the current playback time.
+  let playing = -1;
+  if (now != null) for (let i = 0; i < lines.length && lines[i].t <= now + 0.25; i++) playing = i;
+  useEffect(() => {
+    if (!follow || playing < 0 || !listRef.current) return;
+    listRef.current.querySelector<HTMLElement>('[data-i="' + playing + '"]')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [playing, follow]);
 
   // A clip opened from the rail highlights its range.
   useEffect(() => {
@@ -77,6 +86,7 @@ export default function Transcript({ meeting: m, jump, onClipSaved, say }: Props
         <button className={`btn${clipMode ? ' primary' : ''}`} onClick={() => { setClipMode(!clipMode); setSel(null); }}>
           {clipMode ? 'Cancel clip' : 'Make a clip'}
         </button>
+        {now != null && <label className="parse-info" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><input type="checkbox" checked={follow} onChange={e => setFollow(e.target.checked)} style={{ accentColor: 'var(--accent)' }} />Follow playback</label>}
         {needle && <span className="parse-info">{shown.length} match{shown.length === 1 ? '' : 'es'}</span>}
       </div>
       {clipMode && (
@@ -86,7 +96,7 @@ export default function Transcript({ meeting: m, jump, onClipSaved, say }: Props
       )}
       <div ref={listRef}>
         {shown.map(({ l, i }) => (
-          <div key={i} data-t={l.t} className={`turn${i >= lo && i <= hi ? ' sel' : ''}${clipMode ? ' clipping' : ''}`} onClick={() => pick(i)}>
+          <div key={i} data-t={l.t} data-i={i} className={`turn${i >= lo && i <= hi ? ' sel' : ''}${i === playing ? ' playing' : ''}${clipMode ? ' clipping' : ''}`} onClick={() => pick(i)}>
             <span className="tbtn" style={{ cursor: 'inherit' }}>{fmt(l.t)}</span>
             <div>
               <div className="who"><span className="dot" style={{ background: speakerColor(m.speakers, l.s) }} />{l.s}</div>

@@ -3,7 +3,7 @@ import type { Meeting } from '../types.ts';
 import { fmt, segments, talkShare } from '../util.ts';
 import { speakerColor } from './bits.tsx';
 
-export default function Timeline({ meeting: m, onJump }: { meeting: Meeting; onJump: (t: number) => void }) {
+export default function Timeline({ meeting: m, onJump, now = null }: { meeting: Meeting; onJump: (t: number) => void; now?: number | null }) {
   const D = Math.max(1, m.duration);
   const segs = useMemo(() => segments(m.lines), [m.lines]);
   const share = useMemo(() => talkShare(m.lines), [m.lines]);
@@ -37,6 +37,7 @@ export default function Timeline({ meeting: m, onJump }: { meeting: Meeting; onJ
       <div className="tl-grid">
         {m.speakers.map(s => (
           <Row key={s} name={s} color={speakerColor(m.speakers, s)} share={share[s] || 0}>
+            {now != null && <span className="playhead" style={{ left: pct(Math.min(now, D)) }} aria-hidden="true" />}
             {segs.filter(g => g.s === s).map((g, i) => (
               <button key={i} className="seg" aria-label={`${s} at ${fmt(g.t)}`} onClick={() => onJump(g.t)}
                 style={{ left: pct(g.t), width: `max(2px, ${pct(g.end - g.t)})`, background: speakerColor(m.speakers, s) }} />

@@ -3,6 +3,7 @@ import { api } from '../api.ts';
 import type { MeetingMeta } from '../types.ts';
 import { fmtDur, parseTranscript } from '../util.ts';
 import { Spinner } from './bits.tsx';
+import { isMedia, saveRecording } from '../media.ts';
 
 interface Props { claude: boolean; onClose: () => void; onCreated: (m: MeetingMeta) => void }
 
@@ -19,6 +20,7 @@ export default function NewMeetingDialog({ claude, onClose, onCreated }: Props) 
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [recording, setRecording] = useState<File | null>(null);
 
   useEffect(() => { ref.current?.showModal(); }, []);
 
@@ -44,6 +46,7 @@ export default function NewMeetingDialog({ claude, onClose, onCreated }: Props) 
         speakers: parsed.speakers,
         duration: parsed.duration,
       });
+      if (recording) await saveRecording(m.id, recording);
       onCreated(m);
     } catch (err) {
       setError((err as Error).message);
@@ -72,6 +75,11 @@ export default function NewMeetingDialog({ claude, onClose, onCreated }: Props) 
               : ok ? `Found ${parsed.lines.length} turns · ${parsed.speakers.length} speakers (${parsed.speakers.slice(0, 5).join(', ')}${parsed.speakers.length > 5 ? '…' : ''}) · ${fmtDur(parsed.duration)}`
               : 'Could not find speaker turns. Use one line per turn, like "Name: what they said".'}
           </span>
+        </div>
+        <div className="row">
+          <label className="btn" htmlFor="nmRec" style={{ display: 'inline-flex' }}>{recording ? 'Change recording' : 'Attach recording (optional)'}</label>
+          <input type="file" id="nmRec" accept="video/*,audio/*" hidden onChange={e => { const f = e.target.files?.[0]; if (f && isMedia(f)) setRecording(f); else if (f) setError('Choose a video or audio file.'); e.target.value = ''; }} />
+          <span className="parse-info grow">{recording ? `${recording.name} · ${(recording.size / 1048576).toFixed(1)} MB · kept in this browser` : 'Video or audio of the call, played back in sync with the transcript.'}</span>
         </div>
         <p className="parse-info" style={{ margin: 0 }}>Make sure everyone who was recorded agreed to it before you add their words here.</p>
         <div className="row">

@@ -13,6 +13,7 @@ import SearchView from './components/SearchView.tsx';
 import NewMeetingDialog from './components/NewMeetingDialog.tsx';
 import AskPanel from './components/AskPanel.tsx';
 import { SparkIcon } from './components/bits.tsx';
+import { deleteRecording } from './media.ts';
 
 export interface Focus { t: number; range?: [number, number]; nonce: number }
 
@@ -145,7 +146,7 @@ export default function App() {
           catch (e) { say((e as Error).message); }
         }}
         onToggle={(i, done) => toggleAction(meeting.id, i, done)}
-        onDelete={async () => { await api.remove(meeting.id); say('Call deleted'); go('calls'); refresh(); }}
+        onDelete={async () => { await api.remove(meeting.id); await deleteRecording(meeting.id); say('Call deleted'); go('calls'); refresh(); }}
         onClipSaved={c => setClips(prev => [c, ...prev])}
         say={say}
       />
