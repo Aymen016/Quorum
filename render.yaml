@@ -1,0 +1,15 @@
+# One-click deploy on Render: New → Blueprint → pick this repo, then paste GROQ_API_KEY.
+services:
+  - type: web
+    name: fathom-clone
+    runtime: node
+    plan: free
+    rootDir: web
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/status
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: GROQ_API_KEY
+        sync: false

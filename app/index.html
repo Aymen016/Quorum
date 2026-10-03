@@ -1,0 +1,832 @@
+<title>Quorum</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: app shell — meeting library rail on the left, the open meeting on the right
+   (speaker timeline on top, then Minutes / Catch-up / Transcript / Ask). Rail collapses to a list view on phones. */
+:root {
+  --bg: #f4f6f4;
+  --panel: #ffffff;
+  --sunk: #e9eeea;
+  --fg: #141a17;
+  --muted: #5d6a63;
+  --line: #d6ddd8;
+  --accent: #17734b;        /* green-bench leather */
+  --accent-ink: #ffffff;
+  --accent-soft: #dcefe4;
+  --warn: #a35a00;
+  --bad: #b3261e;
+  --mark: #ffe58f;
+  --s0:#17734b; --s1:#2f5fc4; --s2:#b4532a; --s3:#8a3fb0; --s4:#0f8597; --s5:#b0306a; --s6:#6b7d16; --s7:#6a5acd;
+  --f-display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "Geist Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --r: 8px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg:#0e1311; --panel:#151c19; --sunk:#1c2521; --fg:#e7ede9; --muted:#93a39a; --line:#2a3530;
+  --accent:#4cc38a; --accent-ink:#06120c; --accent-soft:#1d3a2c; --warn:#f0a43c; --bad:#ff8a80; --mark:#6b5a12;
+  --s0:#4cc38a; --s1:#7aa2ff; --s2:#f08a5d; --s3:#c792ea; --s4:#4fd1e0; --s5:#f27aa8; --s6:#b5cc4a; --s7:#a99cff;
+  color-scheme: dark;
+}}
+:root[data-theme="dark"] {
+  --bg:#0e1311; --panel:#151c19; --sunk:#1c2521; --fg:#e7ede9; --muted:#93a39a; --line:#2a3530;
+  --accent:#4cc38a; --accent-ink:#06120c; --accent-soft:#1d3a2c; --warn:#f0a43c; --bad:#ff8a80; --mark:#6b5a12;
+  --s0:#4cc38a; --s1:#7aa2ff; --s2:#f08a5d; --s3:#c792ea; --s4:#4fd1e0; --s5:#f27aa8; --s6:#b5cc4a; --s7:#a99cff;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font: 14px/1.5 var(--f-body); }
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font: 600 11px/1 var(--f-body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+.app { display: grid; grid-template-columns: 300px minmax(0,1fr); height: 100%; }
+.rail { border-right: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+.rail-head { padding: 18px 16px 12px; display: grid; gap: 14px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand h1 { font-size: 22px; font-weight: 700; }
+.brand svg { flex: none; }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: var(--r); padding: 8px 12px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
+.btn:hover { background: var(--sunk); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { filter: brightness(1.07); background: var(--accent); }
+.btn.ghost { border-color: transparent; background: transparent; }
+.btn.danger { color: var(--bad); }
+.btn:disabled { opacity: .55; cursor: default; }
+.search { position: relative; }
+.search input { width: 100%; border: 1px solid var(--line); background: var(--bg); border-radius: var(--r); padding: 8px 10px 8px 32px; }
+.search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+.rail-list { overflow-y: auto; padding: 4px 8px 16px; min-height: 0; flex: 1; display: grid; align-content: start; gap: 2px; }
+.rail-sec { padding: 14px 8px 6px; }
+.mitem { text-align: left; border: 0; background: transparent; border-radius: var(--r); padding: 9px 10px; display: grid; gap: 2px; width: 100%; }
+.mitem:hover { background: var(--sunk); }
+.mitem.on { background: var(--accent-soft); }
+.mitem .t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mitem .m { color: var(--muted); font-size: 12px; display: flex; gap: 8px; align-items: center; }
+.pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 99px; background: var(--sunk); color: var(--muted); letter-spacing: .02em; }
+.pill.live { background: var(--accent-soft); color: var(--accent); }
+.pill.warn { color: var(--warn); }
+.pill.bad { color: var(--bad); }
+
+.main { overflow-y: auto; min-width: 0; }
+.wrap { max-width: 1040px; margin: 0 auto; padding-block: 28px 64px; padding-inline: 32px; display: grid; gap: 22px; }
+.back { display: none; }
+.mhead { display: grid; gap: 10px; }
+.mhead h2 { font-size: clamp(24px, 3.2vw, 34px); font-weight: 700; line-height: 1.1; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--muted); align-items: center; }
+.meta b { color: var(--fg); font-weight: 600; }
+.head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* speaker timeline */
+.tl { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px 12px; display: grid; gap: 8px; }
+.tl-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.tl-grid { display: grid; grid-template-columns: minmax(80px, 140px) minmax(0,1fr) 44px; gap: 6px 12px; align-items: center; }
+.tl-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 7px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.track { position: relative; height: 14px; background: var(--sunk); border-radius: 3px; }
+.seg { position: absolute; top: 0; bottom: 0; border-radius: 2px; border: 0; padding: 0; min-width: 2px; opacity: .9; }
+.seg:hover { opacity: 1; outline: 1px solid var(--fg); }
+.pct { font-size: 12px; color: var(--muted); text-align: right; }
+.axis { position: relative; height: 22px; }
+.axis span { position: absolute; transform: translateX(-50%); font-size: 11px; color: var(--muted); top: 4px; }
+.chaps { position: relative; height: 18px; }
+.chap-tick { position: absolute; top: 0; height: 18px; border: 0; background: transparent; padding: 0 0 0 5px; border-left: 2px solid var(--fg); font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.chap-tick:hover { color: var(--fg); }
+
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.tab { border: 0; background: transparent; padding: 10px 14px; font-weight: 600; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.tab.on { color: var(--fg); border-bottom-color: var(--accent); }
+
+.cols { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+.sec { display: grid; gap: 10px; }
+.sec h3 { font-size: 17px; font-weight: 600; }
+.overview { font-size: 16px; line-height: 1.6; max-width: 65ch; margin: 0; }
+.chapter { display: grid; grid-template-columns: 64px minmax(0,1fr); gap: 4px 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.chapter:first-of-type { border-top: 0; }
+.tbtn { border: 0; background: var(--sunk); border-radius: 5px; padding: 2px 6px; font: 500 12px/1.4 var(--f-mono); font-variant-numeric: tabular-nums; color: var(--accent); justify-self: start; height: fit-content; }
+.tbtn:hover { background: var(--accent-soft); }
+.chapter h4 { margin: 0; font-size: 14.5px; font-weight: 600; }
+.chapter p { margin: 2px 0 0; color: var(--muted); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 10px; }
+.action { display: grid; grid-template-columns: 20px minmax(0,1fr); gap: 10px; align-items: start; padding: 6px 0; }
+.action input { width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--accent); }
+.action.done .txt { text-decoration: line-through; color: var(--muted); }
+.action .who { font-size: 12px; color: var(--muted); display: flex; gap: 8px; align-items: center; margin-top: 2px; }
+.decision { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 10px; padding: 4px 0; }
+.decision .n { font: 500 12px/1.6 var(--f-mono); color: var(--accent); }
+.topics { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.people { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { border: 1px solid var(--line); background: var(--panel); border-radius: 99px; padding: 6px 12px 6px 8px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
+.chip.on { border-color: var(--fg); background: var(--sunk); }
+.avatar { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; flex: none; }
+.pcard { display: grid; gap: 16px; }
+.pcard ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.stats { display: flex; gap: 24px; flex-wrap: wrap; }
+.stat b { display: block; font: 600 22px/1.1 var(--f-display); }
+.stat span { font-size: 12px; color: var(--muted); }
+.moment { display: grid; grid-template-columns: 64px minmax(0,1fr); gap: 12px; padding: 6px 0; border-top: 1px solid var(--line); }
+
+.tr-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; position: sticky; top: 0; background: var(--bg); padding: 8px 0; z-index: 2; }
+.tr-tools .search { flex: 1; min-width: 180px; }
+.turn { display: grid; grid-template-columns: 64px minmax(0,1fr); gap: 2px 12px; padding: 8px 6px; border-radius: 6px; }
+.turn .who { font-weight: 600; font-size: 13px; display: flex; gap: 7px; align-items: center; }
+.turn p { margin: 0; max-width: 72ch; }
+.turn.sel { background: var(--accent-soft); }
+.turn.flash { animation: flash 1.6s ease-out; }
+.turn.clipping { cursor: pointer; }
+.turn.clipping:hover { background: var(--sunk); }
+@keyframes flash { from { background: var(--mark); } to { background: transparent; } }
+mark { background: var(--mark); color: inherit; border-radius: 2px; padding: 0 1px; }
+.clipbar { position: sticky; bottom: 12px; background: var(--panel); border: 1px solid var(--fg); border-radius: 12px; padding: 10px 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; box-shadow: 0 8px 28px rgba(0,0,0,.18); }
+.clipbar input { flex: 1; min-width: 160px; border: 1px solid var(--line); background: var(--bg); border-radius: var(--r); padding: 7px 10px; }
+
+.chat { display: grid; gap: 14px; }
+.msg { display: grid; gap: 4px; max-width: 70ch; }
+.msg.me { justify-self: end; background: var(--accent-soft); padding: 10px 14px; border-radius: 12px 12px 2px 12px; }
+.msg.ai p { margin: 0 0 8px; }
+.msg.ai { white-space: pre-wrap; }
+.ask-form { display: flex; gap: 8px; position: sticky; bottom: 12px; }
+.ask-form input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--panel); border-radius: var(--r); padding: 10px 12px; }
+.sugg { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.empty { display: grid; gap: 14px; justify-items: start; padding: 48px 0; max-width: 58ch; }
+.empty h2 { font-size: 30px; }
+.empty p { color: var(--muted); margin: 0; font-size: 15px; }
+.note { border: 1px dashed var(--line); border-radius: var(--r); padding: 12px 14px; color: var(--muted); }
+.hit { text-align: left; border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 12px 14px; display: grid; gap: 4px; width: 100%; }
+.hit:hover { border-color: var(--accent); }
+.hit .src { font-size: 12px; color: var(--muted); display: flex; gap: 8px; }
+
+dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--fg); padding: 0; width: min(680px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }
+dialog::backdrop { background: rgba(10, 16, 13, .45); }
+.dlg { display: grid; gap: 14px; padding: 22px; }
+.dlg label { display: grid; gap: 6px; font-weight: 500; }
+.dlg input[type=text], .dlg input[type=datetime-local], .dlg textarea { border: 1px solid var(--line); background: var(--bg); border-radius: var(--r); padding: 9px 11px; width: 100%; }
+.dlg textarea { min-height: 220px; font: 12.5px/1.5 var(--f-mono); resize: vertical; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.row > * { min-width: 0; }
+.grow { flex: 1; }
+.parse-info { font-size: 13px; color: var(--muted); }
+.progress { display: flex; align-items: center; gap: 10px; color: var(--muted); }
+.spin { width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 9px 16px; border-radius: 99px; font-weight: 500; z-index: 50; }
+.confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border: 1px solid var(--bad); border-radius: var(--r); padding: 8px 10px; }
+
+@media (prefers-reduced-motion: reduce) { .turn.flash, .spin { animation: none; } }
+@media (max-width: 860px) {
+  .cols { grid-template-columns: minmax(0,1fr); }
+}
+@media (max-width: 720px) {
+  .app { grid-template-columns: minmax(0,1fr); }
+  .app.viewing .rail { display: none; }
+  .app:not(.viewing) .main { display: none; }
+  .rail { border-right: 0; }
+  .wrap { padding-inline: 16px; padding-block: 16px 48px; }
+  .back { display: inline-flex; justify-self: start; }
+  .tl-grid { grid-template-columns: 76px minmax(0,1fr) 36px; gap: 6px 8px; }
+  .chapter, .turn, .moment { grid-template-columns: 54px minmax(0,1fr); }
+}
+</style>
+
+<div class="app" id="app">
+  <aside class="rail">
+    <div class="rail-head">
+      <div class="brand">
+        <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" fill="var(--accent)"/><g fill="var(--accent-ink)"><rect x="6" y="15" width="3" height="7" rx="1.5"/><rect x="10.5" y="10" width="3" height="12" rx="1.5"/><rect x="15" y="6" width="3" height="16" rx="1.5"/><rect x="19.5" y="12" width="3" height="10" rx="1.5"/></g></svg>
+        <h1>Quorum</h1>
+      </div>
+      <button class="btn primary" id="newBtn"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>New meeting</button>
+      <div class="search">
+        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9.5 9.5L13 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <input id="q" type="search" placeholder="Search all meetings" autocomplete="off">
+      </div>
+    </div>
+    <div class="rail-list" id="railList"></div>
+  </aside>
+  <main class="main" id="main"><div class="wrap" id="view"></div></main>
+</div>
+
+<dialog id="dlg">
+  <form class="dlg" id="newForm" method="dialog">
+    <div class="row"><h2 class="grow" style="font-size:22px">New meeting</h2><button type="button" class="btn ghost" id="dlgClose">Close</button></div>
+    <label>Title<input type="text" id="nmTitle" placeholder="Weekly product sync" required></label>
+    <label>When<input type="datetime-local" id="nmDate"></label>
+    <label>Transcript
+      <textarea id="nmText" placeholder="Paste a transcript. Quorum reads Zoom, Meet, Teams, Otter and Fathom exports, plus .vtt and .srt captions.&#10;&#10;[00:00:04] Priya Shah: Okay, let's get started.&#10;[00:00:09] Marcus Lee: Before we start, quick update on hiring…"></textarea>
+    </label>
+    <div class="row">
+      <label class="btn" for="nmFile" style="display:inline-flex">Upload file</label>
+      <input type="file" id="nmFile" accept=".txt,.vtt,.srt,.md,text/plain" hidden>
+      <span class="parse-info grow" id="parseInfo">Paste or upload a transcript to see what Quorum detects.</span>
+    </div>
+    <p class="parse-info" style="margin:0">I'll collect consent from everyone who was recorded before sharing this.</p>
+    <div class="row" id="nmFoot">
+      <span class="grow" id="nmStatus"></span>
+      <button type="submit" class="btn primary" id="nmGo" disabled>Add and summarize</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(() => {
+'use strict';
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = sec => { sec = Math.max(0, Math.round(sec || 0)); const h = Math.floor(sec/3600), m = Math.floor(sec%3600/60), s = sec%60; return h ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${m}:${String(s).padStart(2,'0')}`; };
+const fmtDur = sec => { const m = Math.round(sec/60); return m >= 60 ? `${Math.floor(m/60)} h ${m%60} min` : `${m} min`; };
+const fmtDate = ms => new Date(ms).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const words = s => (s.match(/\S+/g) || []).length;
+const initials = n => n.split(/\s+/).filter(Boolean).slice(0,2).map(w => w[0].toUpperCase()).join('');
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const store = { get(k){ try { return localStorage.getItem(k); } catch { return null; } }, set(k,v){ try { localStorage.setItem(k,v); } catch {} } };
+
+const S = {
+  db: null, user: null, sample: null, ready: false, offline: false,
+  meetings: new Map(), lines: new Map(), clips: [],
+  cur: null, tab: store.get('q.tab') || 'minutes', person: null, q: '', trq: '',
+  clipMode: false, selA: null, selB: null, flashT: null, chats: new Map(), busy: new Set(), names: {},
+  confirmDel: false,
+};
+
+function color(m, name) { const i = (m.speakers || []).indexOf(name); return `var(--s${(i < 0 ? 7 : i) % 8})`; }
+function toast(msg) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2400); }
+function hl(text, q) {
+  const e = esc(text); if (!q) return e;
+  const terms = q.trim().split(/\s+/).filter(t => t.length > 1).map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (!terms.length) return e;
+  return e.replace(new RegExp(`(${terms.map(esc).join('|')})`, 'gi'), '<mark>$1</mark>');
+}
+
+/* ---------- transcript parsing ---------- */
+const TS = '(?:\\d{1,2}:)?\\d{1,2}:\\d{2}(?:[.,]\\d{1,3})?';
+const toSec = s => { const p = s.replace(',', '.').split(':').map(Number); return p.length === 3 ? p[0]*3600 + p[1]*60 + p[2] : p[0]*60 + p[1]; };
+const okName = n => n && n.length <= 40 && n.split(/\s+/).length <= 5 && !/[.?!]$/.test(n) && !/^(https?|note|http)$/i.test(n);
+
+function parseTranscript(raw) {
+  const src = raw.replace(/\r/g, '').replace(/^﻿/, '');
+  const out = [];
+  if (/-->/.test(src)) {
+    const blocks = src.split(/\n\s*\n/);
+    let last = 'Speaker';
+    for (const b of blocks) {
+      const ls = b.split('\n').map(l => l.trim()).filter(Boolean);
+      const ti = ls.findIndex(l => l.includes('-->'));
+      if (ti < 0) continue;
+      const tm = ls[ti].match(new RegExp(TS));
+      let text = ls.slice(ti + 1).join(' ');
+      if (!text) continue;
+      let s = null;
+      const v = text.match(/^<v\s+([^>]+)>/i);
+      if (v) { s = v[1].trim(); text = text.replace(/^<v\s+[^>]+>/i, ''); }
+      text = text.replace(/<[^>]+>/g, '').trim();
+      const n = !s && text.match(/^([^:]{1,40}):\s+(.+)$/);
+      if (n && okName(n[1])) { s = n[1].trim(); text = n[2]; }
+      s = s || last; last = s;
+      const t = tm ? toSec(tm[0]) : null;
+      const prev = out[out.length - 1];
+      if (prev && prev.s === s && t != null && t - prev.t < 30 && words(prev.x) < 80) prev.x += ' ' + text; else out.push({ t, s, x: text });
+    }
+  } else {
+    const reTimeName = new RegExp(`^\\[?(${TS})\\]?\\s*[-–|]?\\s*([^:\\[\\]]{1,40}?)\\s*:\\s+(.+)$`);
+    const reNameTime = new RegExp(`^([^:\\[\\]\\d][^:\\[\\]]{0,39}?)\\s*[-–|]?\\s*[\\(\\[]?(${TS})[\\)\\]]?\\s*[:\\-–]?\\s*(.*)$`);
+    const reTimeText = new RegExp(`^\\[?(${TS})\\]?\\s*[-–|]?\\s*(.*)$`);
+    const reName = /^([A-Z][^:]{0,39}):\s+(.+)$/;
+    let pending = null;
+    const push = (t, s, x) => { const e = { t, s, x: x.trim() }; out.push(e); pending = e.x ? null : e; return e; };
+    for (let line of src.split('\n')) {
+      line = line.trim(); if (!line) continue;
+      let m;
+      if ((m = line.match(reTimeName)) && okName(m[2])) { push(toSec(m[1]), m[2].trim(), m[3]); continue; }
+      if ((m = line.match(reNameTime)) && okName(m[1])) { push(toSec(m[2]), m[1].trim(), m[3] || ''); continue; }
+      if ((m = line.match(reTimeText))) {
+        const n = m[2].match(reName);
+        if (n && okName(n[1])) { push(toSec(m[1]), n[1].trim(), n[2]); continue; }
+        if (!m[2]) { pending = { t: toSec(m[1]), s: null, x: '' }; out.push(pending); continue; }
+        if (/^[A-Z][\w'’.-]*(\s+[A-Z][\w'’.-]*){0,3}$/.test(m[2])) { pending = { t: toSec(m[1]), s: m[2], x: '' }; out.push(pending); continue; }
+        push(toSec(m[1]), out.length ? out[out.length-1].s : 'Speaker', m[2]); continue;
+      }
+      if ((m = line.match(reName)) && okName(m[1])) {
+        if (pending && !pending.s) { pending.s = m[1].trim(); pending.x = m[2]; pending = null; continue; }
+        push(null, m[1].trim(), m[2]); continue;
+      }
+      if (pending) { if (!pending.s && okName(line) && !pending.x) { pending.s = line; continue; } pending.x = (pending.x + ' ' + line).trim(); if (pending.s) pending = null; continue; }
+      if (out.length) out[out.length - 1].x += ' ' + line; else push(null, 'Speaker', line);
+    }
+  }
+  const lines = out.filter(l => l.x && l.x.trim()).map(l => ({ t: l.t, s: l.s || 'Speaker', x: l.x.trim() }));
+  let clock = 0;
+  for (const l of lines) {
+    if (l.t == null || l.t < clock) l.t = clock;
+    clock = l.t + words(l.x) / 2.6;
+  }
+  for (const l of lines) l.t = Math.round(l.t);
+  const talk = {};
+  lines.forEach((l, i) => { const end = i < lines.length - 1 ? lines[i+1].t : l.t + words(l.x) / 2.6; talk[l.s] = (talk[l.s] || 0) + Math.max(1, end - l.t); });
+  const speakers = Object.keys(talk).sort((a, b) => talk[b] - talk[a]);
+  const duration = lines.length ? Math.round(lines[lines.length-1].t + words(lines[lines.length-1].x) / 2.6) : 0;
+  return { lines, speakers, duration };
+}
+
+function segments(m, lines) {
+  return lines.map((l, i) => ({ s: l.s, t: l.t, end: i < lines.length - 1 ? Math.min(lines[i+1].t, l.t + Math.max(4, words(l.x) / 1.6)) : l.t + words(l.x) / 2.6 }));
+}
+function talkShare(m, lines) {
+  const tot = {}; let all = 0;
+  for (const g of segments(m, lines)) { const d = Math.max(1, g.end - g.t); tot[g.s] = (tot[g.s] || 0) + d; all += d; }
+  const out = {}; for (const k in tot) out[k] = tot[k] / (all || 1); return out;
+}
+
+/* ---------- data ---------- */
+async function loadLines(id) {
+  if (S.lines.has(id)) return S.lines.get(id);
+  const m = S.meetings.get(id); if (!m || !S.db) return [];
+  const n = m.chunkCount || 0, parts = [];
+  for (let i = 0; i < n; i++) parts.push(S.db.doc(`meetings/${id}/chunks/${i}`).get().then(s => (s.data()?.lines) || []));
+  const lines = (await Promise.all(parts)).flat();
+  S.lines.set(id, lines);
+  return lines;
+}
+
+async function saveMeeting({ title, date, parsed }) {
+  const id = newId();
+  const CH = 350, chunks = [];
+  for (let i = 0; i < parsed.lines.length; i += CH) chunks.push(parsed.lines.slice(i, i + CH));
+  const uid = S.user?.id ? await S.user.id().catch(() => null) : null;
+  for (let i = 0; i < chunks.length; i++) await S.db.doc(`meetings/${id}/chunks/${i}`).set({ lines: chunks[i] });
+  S.lines.set(id, parsed.lines);
+  await S.db.doc(`meetings/${id}`).set({
+    title, date, duration: parsed.duration, speakers: parsed.speakers, lineCount: parsed.lines.length,
+    chunkCount: chunks.length, status: S.sample ? 'summarizing' : 'nosummary', summary: null,
+    createdBy: uid, createdAt: Date.now(),
+  });
+  return id;
+}
+
+function transcriptText(lines) { return lines.map(l => `[${fmt(l.t)}] ${l.s}: ${l.x}`).join('\n'); }
+const bytes = s => new TextEncoder().encode(s).length;
+
+const SCHEMA = `{
+  "overview": "3-5 sentence plain-language summary of the meeting: purpose, what was settled, what is still open",
+  "chapters": [{"start": <seconds, number>, "title": "short title", "summary": "1-2 sentences"}],
+  "decisions": ["each decision actually agreed, one sentence"],
+  "actions": [{"owner": "exact speaker name or 'Unassigned'", "text": "imperative task", "due": "due date if said, else ''", "t": <seconds where it was agreed>}],
+  "people": [{"name": "exact speaker name", "summary": "2-3 sentences: what this person contributed and their position", "commitments": ["things they agreed to do"], "asks": ["questions or requests directed at them, or open items waiting on them"]}],
+  "topics": ["3-8 short topic tags"]
+}`;
+
+async function summarize(id) {
+  if (!S.sample || S.busy.has(id)) return;
+  const m = S.meetings.get(id); if (!m) return;
+  S.busy.add(id); render();
+  try {
+    await S.db.doc(`meetings/${id}`).update({ status: 'summarizing' });
+    const lines = await loadLines(id);
+    const lim = await S.sample.limits().catch(() => ({ maxPromptBytes: 150000 }));
+    const budget = Math.max(20000, (lim.maxPromptBytes || 150000) - 8000);
+    const full = transcriptText(lines);
+    const head = `Meeting: "${m.title}" (${fmtDur(m.duration)}, ${m.speakers.length} speakers: ${m.speakers.join(', ')}).`;
+    let source = full;
+    if (bytes(full) > budget) {
+      const parts = []; let cur = [];
+      for (const l of lines) { cur.push(l); if (bytes(transcriptText(cur)) > budget * 0.9) { parts.push(cur); cur = []; } }
+      if (cur.length) parts.push(cur);
+      const notes = [];
+      for (let i = 0; i < parts.length; i++) {
+        setStatus(id, `Reading part ${i+1} of ${parts.length}`);
+        const r = await S.sample(`${head}\nThis is part ${i+1} of ${parts.length} of the transcript (timestamps are from the start of the meeting). Write dense working notes for later merging: topics with start timestamps in seconds, decisions, action items with owner and timestamp, and per speaker what they said and committed to. Plain text, no preamble.\n\n${transcriptText(parts[i])}`, { modelTier: 'default' });
+        notes.push(`--- Part ${i+1} (${fmt(parts[i][0].t)}–${fmt(parts[i][parts[i].length-1].t)}) ---\n${r.text}`);
+      }
+      source = `Working notes from each part of the transcript:\n\n${notes.join('\n\n')}`;
+    }
+    setStatus(id, 'Writing minutes');
+    const prompt = `You are writing meeting minutes for a long multi-speaker meeting.\n${head}\nMeeting duration in seconds: ${m.duration}.\n\nReturn ONLY a JSON object, no markdown fences, exactly in this shape:\n${SCHEMA}\n\nRules: chapters cover the whole meeting in order, typically one per 4-10 minutes, "start" in seconds matching transcript timestamps. Include every speaker in "people". Use names exactly as written. Do not invent decisions or tasks that were not said.\n\n${source}`;
+    const out = await S.sample.json(prompt, { modelTier: 'complex' });
+    const summary = normalize(out, m);
+    await S.db.doc(`meetings/${id}`).update({ summary, status: 'ready', statusText: '' });
+  } catch (e) {
+    const code = e?.code || '';
+    const msg = code === 'not_granted' ? 'Claude access was declined for this page.' : code === 'rate_limited' ? 'Claude is busy. Try again in a minute.' : 'Claude could not finish the summary. Try again.';
+    await S.db.doc(`meetings/${id}`).update({ status: 'failed', statusText: msg }).catch(() => {});
+  } finally { S.busy.delete(id); render(); }
+}
+function setStatus(id, text) { S.db.doc(`meetings/${id}`).update({ statusText: text }).catch(() => {}); }
+function normalize(o, m) {
+  const arr = v => Array.isArray(v) ? v : [];
+  const str = v => typeof v === 'string' ? v : (v == null ? '' : String(v));
+  const num = v => Math.max(0, Math.min(m.duration || 1e9, Number(v) || 0));
+  return {
+    overview: str(o?.overview),
+    chapters: arr(o?.chapters).map(c => ({ start: num(c.start), title: str(c.title), summary: str(c.summary) })).sort((a, b) => a.start - b.start),
+    decisions: arr(o?.decisions).map(str).filter(Boolean),
+    actions: arr(o?.actions).map(a => ({ owner: str(a.owner) || 'Unassigned', text: str(a.text), due: str(a.due), t: num(a.t), done: false })).filter(a => a.text),
+    people: arr(o?.people).map(p => ({ name: str(p.name), summary: str(p.summary), commitments: arr(p.commitments).map(str), asks: arr(p.asks).map(str) })),
+    topics: arr(o?.topics).map(str).filter(Boolean).slice(0, 8),
+  };
+}
+
+/* ---------- rendering ---------- */
+function render() { renderRail(); renderMain(); }
+
+function renderRail() {
+  const list = $('#railList');
+  const ms = [...S.meetings.entries()].sort((a, b) => (b[1].date || 0) - (a[1].date || 0));
+  let h = '';
+  if (!S.ready) h = `<div class="rail-sec progress"><span class="spin"></span>Loading meetings</div>`;
+  else if (S.offline) h = `<div class="rail-sec note">Sign in to claude.ai to open your team's meeting library.</div>`;
+  else if (!ms.length) h = `<div class="rail-sec note">No meetings yet. Add a transcript to get minutes, chapters and a catch-up for each person.</div>`;
+  else {
+    h += `<div class="rail-sec eyebrow">Meetings · ${ms.length}</div>`;
+    for (const [id, m] of ms) {
+      const st = m.status === 'summarizing' || S.busy.has(id) ? `<span class="pill live">Summarizing</span>` : m.status === 'failed' ? `<span class="pill bad">Needs retry</span>` : m.example ? `<span class="pill">Example</span>` : '';
+      h += `<button class="mitem${S.cur === id && !S.q ? ' on' : ''}" data-open="${esc(id)}"><span class="t">${esc(m.title)}</span><span class="m"><span>${esc(new Date(m.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}</span><span class="mono">${fmtDur(m.duration)}</span><span>${(m.speakers||[]).length} present</span>${st}</span></button>`;
+    }
+    if (S.clips.length) {
+      h += `<div class="rail-sec eyebrow">Clips · ${S.clips.length}</div>`;
+      for (const c of [...S.clips].sort((a, b) => b.createdAt - a.createdAt)) {
+        const m = S.meetings.get(c.meetingId);
+        h += `<button class="mitem" data-clip="${esc(c.id)}"><span class="t">${esc(c.title)}</span><span class="m"><span class="mono">${fmt(c.start)}–${fmt(c.end)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m?.title || 'Deleted meeting')}</span></span></button>`;
+      }
+    }
+  }
+  list.innerHTML = h;
+}
+
+function renderMain() {
+  const v = $('#view');
+  $('#app').classList.toggle('viewing', !!(S.cur || S.q));
+  if (S.q) return renderSearch(v);
+  const m = S.cur && S.meetings.get(S.cur);
+  if (!m) {
+    v.innerHTML = `<div class="empty">
+      <span class="eyebrow">Meeting notes for long meetings</span>
+      <h2>Every voice in the room, on the record.</h2>
+      <p>Paste or upload a transcript. Claude writes the minutes, splits the meeting into chapters, lists who owes what, and gives each person a catch-up of what they missed. Everything you add is shared with your team.</p>
+      <div class="row"><button class="btn primary" data-act="new">Add a meeting</button>${S.offline ? '' : `<span class="parse-info">Works with Zoom, Meet, Teams, Otter, Fathom, .vtt and .srt</span>`}</div>
+      ${S.offline ? `<p class="note">This page needs you signed in to claude.ai to store meetings.</p>` : ''}
+    </div>`;
+    return;
+  }
+  const id = S.cur;
+  const lines = S.lines.get(id);
+  if (!lines) { v.innerHTML = `<div class="progress"><span class="spin"></span>Loading transcript</div>`; loadLines(id).then(render); return; }
+  const share = talkShare(m, lines);
+  const sum = m.summary;
+  const summarizing = m.status === 'summarizing' || S.busy.has(id);
+
+  let h = `<button class="btn ghost back" data-act="home">← All meetings</button>
+  <header class="mhead">
+    <div class="row"><span class="eyebrow">${esc(fmtDate(m.date))}</span>${m.example ? '<span class="pill">Example meeting</span>' : ''}</div>
+    <h2>${esc(m.title)}</h2>
+    <div class="meta"><span><b class="mono">${fmtDur(m.duration)}</b></span><span><b>${m.speakers.length}</b> present</span><span><b>${m.lineCount}</b> turns</span>${sum ? `<span><b>${sum.actions.length}</b> action items</span>` : ''}${m.createdBy ? `<span data-name="${esc(m.createdBy)}">Added by ${esc(S.names[m.createdBy] || '…')}</span>` : ''}</div>
+    <div class="head-actions">
+      ${sum ? `<button class="btn" data-act="copy-notes">Copy minutes</button>` : ''}
+      ${S.sample && !summarizing ? `<button class="btn" data-act="resum">${sum ? 'Re-summarize' : 'Summarize'}</button>` : ''}
+      <button class="btn ghost danger" data-act="del">Delete</button>
+    </div>
+    ${S.confirmDel ? `<div class="confirm"><span class="grow">Delete this meeting, its transcript and clips for everyone?</span><button class="btn danger" data-act="del-yes">Delete meeting</button><button class="btn ghost" data-act="del-no">Keep</button></div>` : ''}
+  </header>`;
+
+  // speaker timeline
+  const D = Math.max(1, m.duration);
+  const segs = segments(m, lines);
+  const step = D > 5400 ? 1800 : D > 2400 ? 600 : D > 900 ? 300 : 60;
+  let axis = ''; for (let t = 0; t <= D; t += step) axis += `<span class="mono" style="left:${(t/D*100).toFixed(2)}%">${fmt(t)}</span>`;
+  h += `<section class="tl" aria-label="Speaker timeline">
+    <div class="tl-top"><span class="eyebrow">Who spoke when</span><span class="parse-info">Click a bar to jump to that moment</span></div>
+    ${sum?.chapters?.length ? `<div class="tl-grid"><span class="eyebrow">Chapters</span><div class="chaps">${sum.chapters.map((c, i) => { const next = sum.chapters[i+1]?.start ?? D; return `<button class="chap-tick" style="left:${(c.start/D*100).toFixed(2)}%;width:${Math.max(1,(next-c.start)/D*100).toFixed(2)}%" data-jump="${c.start}" title="${esc(fmt(c.start) + ' ' + c.title)}">${esc(c.title)}</button>`; }).join('')}</div><span></span></div>` : ''}
+    <div class="tl-grid">
+    ${m.speakers.map(s => `<span class="tl-name" title="${esc(s)}"><span class="dot" style="background:${color(m,s)}"></span>${esc(s)}</span>
+      <div class="track">${segs.filter(g => g.s === s).map(g => `<button class="seg" aria-label="${esc(s)} at ${fmt(g.t)}" style="left:${(g.t/D*100).toFixed(3)}%;width:${Math.max(.15,(g.end-g.t)/D*100).toFixed(3)}%;background:${color(m,s)}" data-jump="${g.t}"></button>`).join('')}</div>
+      <span class="pct mono">${Math.round((share[s]||0)*100)}%</span>`).join('')}
+      <span></span><div class="axis">${axis}</div><span></span>
+    </div>
+  </section>`;
+
+  const tabs = [['minutes','Minutes'],['catchup','Catch-up'],['transcript','Transcript'],['ask','Ask']];
+  h += `<nav class="tabs" role="tablist">${tabs.map(([k,l]) => `<button class="tab${S.tab===k?' on':''}" role="tab" aria-selected="${S.tab===k}" data-tab="${k}">${l}</button>`).join('')}</nav>`;
+  h += `<div id="tabBody">${tabBody(id, m, lines)}</div>`;
+  v.innerHTML = h;
+  resolveNames();
+  if (S.flashT != null && S.tab === 'transcript') {
+    const t = S.flashT; S.flashT = null;
+    const els = [...v.querySelectorAll('.turn')]; let best = els[0];
+    for (const el of els) { if (+el.dataset.t <= t) best = el; else break; }
+    if (best) { best.scrollIntoView({ block: 'center' }); best.classList.add('flash'); }
+  }
+}
+
+function statusBlock(id, m) {
+  if (m.status === 'summarizing' || S.busy.has(id)) return `<div class="card"><div class="progress"><span class="spin"></span>${esc(m.statusText || 'Claude is reading the transcript')}. Long meetings take a minute or two.</div></div>`;
+  if (m.status === 'failed') return `<div class="card"><p style="margin:0">${esc(m.statusText || 'The summary did not finish.')}</p>${S.sample ? `<div><button class="btn primary" data-act="resum">Try again</button></div>` : ''}</div>`;
+  return `<div class="card"><p style="margin:0">No minutes yet. ${S.sample ? 'Ask Claude to read the transcript and write them.' : 'Open this page in claude.ai to have Claude write them.'}</p>${S.sample ? `<div><button class="btn primary" data-act="resum">Summarize</button></div>` : ''}</div>`;
+}
+
+function tabBody(id, m, lines) {
+  const sum = m.summary;
+  if (S.tab === 'minutes') {
+    if (!sum) return statusBlock(id, m);
+    return `<div class="cols">
+      <div class="sec">
+        <span class="eyebrow">Overview</span>
+        <p class="overview">${esc(sum.overview)}</p>
+        ${sum.topics.length ? `<div class="topics">${sum.topics.map(t => `<span class="pill">${esc(t)}</span>`).join('')}</div>` : ''}
+        <h3 style="margin-top:14px">Chapters</h3>
+        <div>${sum.chapters.map(c => `<div class="chapter"><button class="tbtn" data-jump="${c.start}">${fmt(c.start)}</button><div><h4>${esc(c.title)}</h4><p>${esc(c.summary)}</p></div></div>`).join('') || '<p class="parse-info">No chapters.</p>'}</div>
+      </div>
+      <div class="sec">
+        <div class="card">
+          <div class="row"><h3 class="grow">Action items</h3><span class="parse-info mono">${sum.actions.filter(a=>a.done).length}/${sum.actions.length} done</span></div>
+          ${sum.actions.map((a, i) => `<div class="action${a.done?' done':''}"><input type="checkbox" id="act-${esc(id)}-${i}" data-done="${i}" ${a.done?'checked':''} aria-label="Mark done"><div><label for="act-${esc(id)}-${i}" class="txt">${esc(a.text)}</label><div class="who"><span class="dot" style="background:${color(m,a.owner)}"></span>${esc(a.owner)}${a.due ? ` · due ${esc(a.due)}` : ''}<button class="tbtn" data-jump="${a.t}">${fmt(a.t)}</button></div></div></div>`).join('') || '<p class="parse-info">No action items were agreed.</p>'}
+        </div>
+        <div class="card">
+          <h3>Resolved</h3>
+          ${sum.decisions.map((d, i) => `<div class="decision"><span class="n">${String(i+1).padStart(2,'0')}</span><span>${esc(d)}</span></div>`).join('') || '<p class="parse-info">No decisions recorded.</p>'}
+        </div>
+      </div>
+    </div>`;
+  }
+  if (S.tab === 'catchup') {
+    const share = talkShare(m, lines);
+    const p = S.person && m.speakers.includes(S.person) ? S.person : m.speakers[0];
+    const info = sum?.people?.find(x => x.name.toLowerCase() === p.toLowerCase());
+    const mine = lines.filter(l => l.s === p);
+    const first = p.split(/\s+/)[0];
+    const mentions = first.length > 2 ? lines.filter(l => l.s !== p && new RegExp(`\\b${first.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\b`, 'i').test(l.x)) : [];
+    const theirActions = (sum?.actions || []).filter(a => a.owner.toLowerCase() === p.toLowerCase());
+    return `<div class="sec">
+      <p class="parse-info" style="margin:0">Pick a person to see what they said, what they signed up for, and every time someone mentioned them.</p>
+      <div class="people">${m.speakers.map(s => `<button class="chip${s===p?' on':''}" data-person="${esc(s)}"><span class="avatar" style="background:${color(m,s)}">${esc(initials(s))}</span>${esc(s)}</button>`).join('')}</div>
+      <div class="cols" style="margin-top:8px">
+        <div class="pcard">
+          <div class="stats">
+            <div class="stat"><b class="mono">${Math.round((share[p]||0)*100)}%</b><span>of talk time</span></div>
+            <div class="stat"><b class="mono">${mine.length}</b><span>turns</span></div>
+            <div class="stat"><b class="mono">${theirActions.length}</b><span>action items</span></div>
+            <div class="stat"><b class="mono">${mentions.length}</b><span>mentions by others</span></div>
+          </div>
+          ${info ? `<p class="overview" style="font-size:15px">${esc(info.summary)}</p>` : (sum ? '' : statusBlock(id, m))}
+          ${info?.commitments?.length ? `<div class="sec"><h3>Committed to</h3><ul>${info.commitments.map(c => `<li>${esc(c)}</li>`).join('')}</ul></div>` : ''}
+          ${info?.asks?.length ? `<div class="sec"><h3>Waiting on ${esc(first)}</h3><ul>${info.asks.map(c => `<li>${esc(c)}</li>`).join('')}</ul></div>` : ''}
+        </div>
+        <div class="sec">
+          <h3>Mentions of ${esc(first)}</h3>
+          <div>${mentions.slice(0, 30).map(l => `<div class="moment"><button class="tbtn" data-jump="${l.t}">${fmt(l.t)}</button><div><b style="font-weight:600">${esc(l.s)}</b> ${hl(l.x, first)}</div></div>`).join('') || '<p class="parse-info">Nobody mentioned them by name.</p>'}</div>
+        </div>
+      </div>
+    </div>`;
+  }
+  if (S.tab === 'transcript') {
+    const q = S.trq.trim().toLowerCase();
+    const shown = q ? lines.filter(l => (l.x + ' ' + l.s).toLowerCase().includes(q)) : lines;
+    const lo = S.selA != null ? Math.min(S.selA, S.selB ?? S.selA) : -1, hi = S.selA != null ? Math.max(S.selA, S.selB ?? S.selA) : -1;
+    let h = `<div class="tr-tools"><div class="search"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9.5 9.5L13 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><input id="trq" type="search" placeholder="Search this transcript" value="${esc(S.trq)}" autocomplete="off"></div>
+      <button class="btn${S.clipMode ? ' primary' : ''}" data-act="clipmode">${S.clipMode ? 'Cancel clip' : 'Make a clip'}</button>
+      ${q ? `<span class="parse-info">${shown.length} match${shown.length===1?'':'es'}</span>` : ''}</div>`;
+    if (S.clipMode) h += `<p class="parse-info" style="margin:0">${S.selA == null ? 'Click the first line of the clip.' : S.selB == null ? 'Now click the last line.' : 'Name the clip and save it.'}</p>`;
+    h += `<div>${shown.map(l => { const i = lines.indexOf(l); return `<div class="turn${i>=lo && i<=hi ? ' sel' : ''}${S.clipMode ? ' clipping' : ''}" data-t="${l.t}" data-i="${i}"><button class="tbtn" data-jump-local="${l.t}">${fmt(l.t)}</button><div><div class="who"><span class="dot" style="background:${color(m,l.s)}"></span>${esc(l.s)}</div><p>${hl(l.x, S.trq)}</p></div></div>`; }).join('')}</div>`;
+    if (S.clipMode && S.selA != null && S.selB != null) h += `<div class="clipbar"><span class="mono">${fmt(lines[lo].t)}–${fmt(lines[hi].t + words(lines[hi].x)/2.6)}</span><input id="clipTitle" type="text" placeholder="Clip title" value="${esc(lines[lo].x.split(/\s+/).slice(0,7).join(' '))}"><button class="btn primary" data-act="saveclip">Save clip</button></div>`;
+    return h;
+  }
+  if (S.tab === 'ask') {
+    const chat = S.chats.get(id) || [];
+    const sugg = ['What did we decide about the roadmap?', 'What is still unresolved?', 'Draft a follow-up email to the attendees', 'Where did people disagree?'];
+    if (!S.sample) return `<div class="card"><p style="margin:0">Asking questions needs Claude, which is available when this page is open in claude.ai.</p></div>`;
+    return `<div class="chat">
+      ${chat.length ? '' : `<p class="parse-info" style="margin:0">Ask anything about this meeting. Claude answers from the transcript and cites timestamps.</p><div class="sugg">${sugg.map(s => `<button class="btn" data-sugg="${esc(s)}">${esc(s)}</button>`).join('')}</div>`}
+      ${chat.map(c => c.role === 'user' ? `<div class="msg me">${esc(c.content)}</div>` : `<div class="msg ai">${linkTimes(esc(c.content))}</div>`).join('')}
+      <form class="ask-form" id="askForm"><input id="askIn" type="text" placeholder="Ask about this meeting" autocomplete="off" ${S.busy.has('ask:'+id)?'disabled':''}><button class="btn primary" ${S.busy.has('ask:'+id)?'disabled':''}>Ask</button></form>
+    </div>`;
+  }
+  return '';
+}
+function linkTimes(html) { return html.replace(/\[?\b((?:\d{1,2}:)?\d{1,2}:\d{2})\b\]?/g, (all, t) => `<button class="tbtn" data-jump="${toSec(t)}">${t}</button>`); }
+
+function renderSearch(v) {
+  const q = S.q.trim().toLowerCase();
+  const terms = q.split(/\s+/).filter(Boolean);
+  const match = s => { const l = (s || '').toLowerCase(); return terms.every(t => l.includes(t)); };
+  const hits = [];
+  for (const [id, m] of S.meetings) {
+    if (match(m.title)) hits.push({ id, t: 0, kind: 'Meeting', text: m.title });
+    const sum = m.summary;
+    if (sum) {
+      if (match(sum.overview)) hits.push({ id, t: 0, kind: 'Overview', text: sum.overview });
+      sum.chapters.forEach(c => match(c.title + ' ' + c.summary) && hits.push({ id, t: c.start, kind: 'Chapter', text: `${c.title}: ${c.summary}` }));
+      sum.actions.forEach(a => match(a.text + ' ' + a.owner) && hits.push({ id, t: a.t, kind: 'Action item', text: `${a.owner}: ${a.text}` }));
+      sum.decisions.forEach(d => match(d) && hits.push({ id, t: 0, kind: 'Decision', text: d }));
+    }
+    const lines = S.lines.get(id);
+    if (lines) lines.forEach(l => match(l.x + ' ' + l.s) && hits.push({ id, t: l.t, kind: l.s, text: l.x, line: true }));
+  }
+  const missing = [...S.meetings.keys()].filter(id => !S.lines.has(id));
+  if (missing.length) Promise.all(missing.map(loadLines)).then(() => S.q && renderMain());
+  v.innerHTML = `<button class="btn ghost back" data-act="clearq">← All meetings</button>
+    <div class="mhead"><span class="eyebrow">Search across ${S.meetings.size} meeting${S.meetings.size===1?'':'s'}</span><h2>“${esc(S.q)}”</h2><div class="meta">${hits.length} result${hits.length===1?'':'s'}${missing.length ? ' · searching transcripts…' : ''}</div></div>
+    <div class="sec">${hits.slice(0, 200).map(x => { const m = S.meetings.get(x.id); return `<button class="hit" data-hit="${esc(x.id)}" data-t="${x.t}" data-line="${x.line?1:0}"><span class="src"><b>${esc(m.title)}</b><span class="mono">${fmt(x.t)}</span><span>${esc(x.kind)}</span></span><span>${hl(x.text.length > 320 ? x.text.slice(0, 320) + '…' : x.text, S.q)}</span></button>`; }).join('') || (missing.length ? '' : '<p class="parse-info">Nothing matched. Try fewer words.</p>')}</div>`;
+}
+
+async function resolveNames() {
+  if (!S.user?.profiles) return;
+  const ids = [...new Set([...S.meetings.values()].map(m => m.createdBy).filter(Boolean))].filter(id => !(id in S.names));
+  if (!ids.length) return;
+  try {
+    const ps = await S.user.profiles(ids);
+    ids.forEach(id => S.names[id] = ps?.[id]?.name || 'Someone');
+    document.querySelectorAll('[data-name]').forEach(el => el.textContent = 'Added by ' + (S.names[el.dataset.name] || 'Someone'));
+  } catch {}
+}
+
+/* ---------- actions ---------- */
+function open(id, opts = {}) {
+  S.cur = id; S.q = ''; $('#q').value = ''; S.clipMode = false; S.selA = S.selB = null; S.confirmDel = false; S.trq = '';
+  if (opts.tab) S.tab = opts.tab;
+  if (opts.t != null) { S.tab = 'transcript'; S.flashT = opts.t; }
+  try { history.replaceState(null, '', '#m-' + id); } catch {}
+  render(); $('#main').scrollTop = opts.t != null ? $('#main').scrollTop : 0;
+}
+function jump(t) { S.tab = 'transcript'; S.trq = ''; S.flashT = t; renderMain(); }
+
+document.addEventListener('click', async e => {
+  const b = (S.clipMode && e.target.closest('[data-i]')) || e.target.closest('button'); if (!b) return;
+  const d = b.dataset;
+  if (d.open) return open(d.open);
+  if (d.clip) { const c = S.clips.find(x => x.id === d.clip); if (!c) return; open(c.meetingId); await loadLines(c.meetingId); const L = S.lines.get(c.meetingId); S.tab = 'transcript'; S.clipMode = false; S.selA = L.findIndex(l => l.t >= c.start); S.selB = Math.max(S.selA, L.findLastIndex(l => l.t <= c.end - 0.5)); S.flashT = c.start; try { history.replaceState(null, '', '#c-' + c.id); } catch {} renderMain(); copyClip(c, L, true); return; }
+  if (d.hit) return open(d.hit, d.line === '1' || +d.t > 0 ? { t: +d.t } : {});
+  if (d.tab) { S.tab = d.tab; store.set('q.tab', d.tab); S.clipMode = false; return renderMain(); }
+  if (d.jump != null) return jump(+d.jump);
+  if (d.person) { S.person = d.person; return renderMain(); }
+  if (d.sugg) return ask(d.sugg);
+  if (d.jumpLocal != null && !S.clipMode) { b.closest('.turn')?.classList.remove('flash'); void b.offsetWidth; b.closest('.turn')?.classList.add('flash'); return; }
+  if (d.i != null && S.clipMode) {
+    const i = +d.i;
+    if (S.selA == null || S.selB != null) { S.selA = i; S.selB = null; } else S.selB = i;
+    return renderMain();
+  }
+  switch (d.act) {
+    case 'new': return openNew();
+    case 'home': S.cur = null; S.q = ''; try { history.replaceState(null, '', '#'); } catch {} return render();
+    case 'clearq': S.q = ''; $('#q').value = ''; return render();
+    case 'resum': return summarize(S.cur);
+    case 'del': S.confirmDel = true; return renderMain();
+    case 'del-no': S.confirmDel = false; return renderMain();
+    case 'del-yes': return deleteMeeting(S.cur);
+    case 'clipmode': S.clipMode = !S.clipMode; S.selA = S.selB = null; return renderMain();
+    case 'saveclip': return saveClip();
+    case 'copy-notes': return copyText(minutesText(S.meetings.get(S.cur)), 'Minutes copied');
+  }
+});
+
+document.addEventListener('change', async e => {
+  const el = e.target;
+  if (el.dataset.done != null && S.cur) {
+    const m = S.meetings.get(S.cur); const sum = structuredClone(m.summary);
+    sum.actions[+el.dataset.done].done = el.checked;
+    m.summary = sum; renderMain();
+    try { await S.db.doc(`meetings/${S.cur}`).update({ summary: sum }); } catch { toast('Could not save. You may have view-only access.'); }
+  }
+});
+
+let qTimer;
+$('#q').addEventListener('input', e => { clearTimeout(qTimer); qTimer = setTimeout(() => { S.q = e.target.value; render(); }, 180); });
+document.addEventListener('input', e => {
+  if (e.target.id === 'trq') { S.trq = e.target.value; const pos = e.target.selectionStart; renderMain(); const n = $('#trq'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } }
+});
+document.addEventListener('submit', e => {
+  if (e.target.id === 'askForm') { e.preventDefault(); const v = $('#askIn').value.trim(); if (v) ask(v); }
+});
+
+async function ask(question) {
+  const id = S.cur, m = S.meetings.get(id); if (!S.sample || !m) return;
+  const chat = S.chats.get(id) || []; chat.push({ role: 'user', content: question }, { role: 'assistant', content: 'Thinking…' });
+  S.chats.set(id, chat); S.busy.add('ask:' + id); renderMain();
+  const lines = await loadLines(id);
+  const lim = await S.sample.limits().catch(() => ({ maxPromptBytes: 150000 }));
+  let tx = transcriptText(lines); const budget = (lim.maxPromptBytes || 150000) - 12000;
+  while (bytes(tx) > budget) tx = tx.slice(0, Math.floor(tx.length * 0.85));
+  const ctx = `You answer questions about one meeting for a teammate. Be concise and concrete. Cite moments as [m:ss] or [h:mm:ss] timestamps from the transcript. If the transcript does not say, say so.\n\nMeeting: "${m.title}", ${fmtDate(m.date)}, ${fmtDur(m.duration)}. Speakers: ${m.speakers.join(', ')}.\n${m.summary ? 'Minutes (JSON): ' + JSON.stringify({ overview: m.summary.overview, decisions: m.summary.decisions, actions: m.summary.actions }) + '\n' : ''}\nTranscript:\n${tx}`;
+  const turns = chat.slice(0, -1).map((c, i) => i === 0 ? { role: 'user', content: ctx + '\n\nQuestion: ' + c.content } : c);
+  try {
+    const r = await S.sample(turns, { cache: false, onText: ({ text }) => { chat[chat.length-1].content = text; const last = document.querySelector('.msg.ai:last-of-type'); if (last && S.cur === id && S.tab === 'ask') last.textContent = text; } });
+    chat[chat.length-1].content = r.text;
+  } catch (err) {
+    chat[chat.length-1].content = err?.code === 'not_granted' ? 'Claude access was declined for this page.' : err?.code === 'rate_limited' ? 'Claude is busy. Try again in a minute.' : (err?.text || 'Claude could not answer. Try again.');
+  }
+  S.busy.delete('ask:' + id); if (S.cur === id) { renderMain(); $('#askIn')?.focus(); }
+}
+
+async function saveClip() {
+  const id = S.cur, L = S.lines.get(id); const lo = Math.min(S.selA, S.selB), hi = Math.max(S.selA, S.selB);
+  const title = ($('#clipTitle').value || '').trim() || 'Untitled clip';
+  const cid = newId();
+  const clip = { meetingId: id, start: L[lo].t, end: Math.round(L[hi].t + words(L[hi].x)/2.6), title, createdAt: Date.now() };
+  try { await S.db.doc(`clips/${cid}`).set(clip); S.clipMode = false; S.selA = S.selB = null; renderMain(); copyClip({ id: cid, ...clip }, L); }
+  catch { toast('Could not save the clip. You may have view-only access.'); }
+}
+function copyClip(c, L, quiet) {
+  const m = S.meetings.get(c.meetingId);
+  const text = `${c.title}\n${m?.title || ''} · ${fmt(c.start)}–${fmt(c.end)}\n\n` + L.filter(l => l.t >= c.start && l.t < c.end).map(l => `[${fmt(l.t)}] ${l.s}: ${l.x}`).join('\n') + `\n\nOpen in Quorum: add #c-${c.id} to this page's link`;
+  if (!quiet) copyText(text, 'Clip saved and copied');
+}
+function minutesText(m) {
+  const s = m.summary; if (!s) return '';
+  return `${m.title}\n${fmtDate(m.date)} · ${fmtDur(m.duration)} · ${m.speakers.join(', ')}\n\nOVERVIEW\n${s.overview}\n\nDECISIONS\n${s.decisions.map((d,i) => `${i+1}. ${d}`).join('\n')}\n\nACTION ITEMS\n${s.actions.map(a => `[${a.done?'x':' '}] ${a.owner}: ${a.text}${a.due?` (due ${a.due})`:''}`).join('\n')}\n\nCHAPTERS\n${s.chapters.map(c => `${fmt(c.start)} ${c.title}: ${c.summary}`).join('\n')}`;
+}
+async function copyText(text, ok) {
+  try { await navigator.clipboard.writeText(text); toast(ok); }
+  catch { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); let done = false; try { done = document.execCommand('copy'); } catch {} ta.remove(); toast(done ? ok : 'Copy is blocked here'); }
+}
+async function deleteMeeting(id) {
+  const m = S.meetings.get(id); if (!m) return;
+  try {
+    for (let i = 0; i < (m.chunkCount || 0); i++) await S.db.doc(`meetings/${id}/chunks/${i}`).delete();
+    for (const c of S.clips.filter(c => c.meetingId === id)) await S.db.doc(`clips/${c.id}`).delete();
+    await S.db.doc(`meetings/${id}`).delete();
+    S.cur = null; S.confirmDel = false; toast('Meeting deleted'); render();
+  } catch { toast('Could not delete. You may have view-only access.'); }
+}
+
+/* ---------- new meeting dialog ---------- */
+const dlg = $('#dlg'); let parsed = null;
+function openNew() {
+  if (!S.db) { toast(S.ready ? 'Sign in to claude.ai to add meetings' : 'Still connecting…'); return; }
+  const now = new Date(); now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  $('#nmDate').value = now.toISOString().slice(0, 16);
+  $('#nmStatus').textContent = ''; $('#nmGo').textContent = S.sample ? 'Add and summarize' : 'Add meeting';
+  dlg.showModal ? dlg.showModal() : dlg.setAttribute('open', '');
+}
+$('#newBtn').addEventListener('click', openNew);
+$('#dlgClose').addEventListener('click', () => dlg.close());
+function reparse() {
+  const raw = $('#nmText').value;
+  parsed = raw.trim() ? parseTranscript(raw) : null;
+  const ok = parsed && parsed.lines.length >= 2;
+  $('#parseInfo').textContent = !parsed ? 'Paste or upload a transcript to see what Quorum detects.' : ok ? `Found ${parsed.lines.length} turns · ${parsed.speakers.length} speakers (${parsed.speakers.slice(0,5).join(', ')}${parsed.speakers.length>5?'…':''}) · ${fmtDur(parsed.duration)}` : 'Could not find speaker turns. Use one line per turn, like "Name: what they said".';
+  $('#nmGo').disabled = !ok;
+}
+$('#nmText').addEventListener('input', reparse);
+$('#nmFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  $('#nmText').value = await f.text();
+  if (!$('#nmTitle').value) $('#nmTitle').value = f.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ');
+  reparse(); e.target.value = '';
+});
+$('#newForm').addEventListener('submit', async e => {
+  e.preventDefault(); if (!parsed) return;
+  const title = $('#nmTitle').value.trim() || 'Untitled meeting';
+  const date = $('#nmDate').value ? new Date($('#nmDate').value).getTime() : Date.now();
+  $('#nmGo').disabled = true; $('#nmStatus').innerHTML = '<span class="progress"><span class="spin"></span>Saving transcript</span>';
+  try {
+    const id = await saveMeeting({ title, date, parsed });
+    dlg.close(); $('#nmText').value = ''; $('#nmTitle').value = ''; parsed = null; reparse();
+    S.tab = 'minutes'; open(id);
+    if (S.sample) summarize(id);
+  } catch (err) {
+    $('#nmStatus').textContent = err?.code === 'not_granted' ? 'You have view-only access to this library.' : 'Could not save. Check your connection and try again.';
+    $('#nmGo').disabled = false;
+  }
+});
+
+/* ---------- boot ---------- */
+function fromHash() {
+  const h = location.hash.slice(1);
+  if (h.startsWith('m-') && S.meetings.has(h.slice(2))) { open(h.slice(2)); return true; }
+  if (h.startsWith('c-')) { const c = S.clips.find(x => x.id === h.slice(2)); if (c) { document.querySelector(`[data-clip="${c.id}"]`)?.click(); return true; } }
+  return false;
+}
+render();
+(async () => {
+  const use = n => window.claude?.use ? window.claude.use(n).catch(() => null) : Promise.resolve(null);
+  const [db, user, sample] = await Promise.all([use('db'), use('user'), use('sample')]);
+  S.db = db; S.user = user; S.sample = sample;
+  if (!db) { S.ready = true; S.offline = true; return render(); }
+  let first = true, clipsIn = false;
+  db.collection('clips').onSnapshot(snap => { S.clips = snap.docs.map(d => ({ id: d.id, ...d.data() })); clipsIn = true; renderRail(); }, () => {});
+  db.collection('meetings').onSnapshot(snap => {
+    const seen = new Set();
+    for (const d of snap.docs) {
+      const prev = S.meetings.get(d.id), next = d.data();
+      if (prev && prev.chunkCount !== next.chunkCount) S.lines.delete(d.id);
+      S.meetings.set(d.id, next); seen.add(d.id);
+    }
+    for (const id of [...S.meetings.keys()]) if (!seen.has(id)) { S.meetings.delete(id); S.lines.delete(id); if (S.cur === id) S.cur = null; }
+    S.ready = true;
+    if (first) {
+      first = false;
+      const tryHash = () => { if (!fromHash() && !S.cur && window.innerWidth > 720) { const latest = [...S.meetings.entries()].sort((a,b) => b[1].date - a[1].date)[0]; if (latest) S.cur = latest[0]; } render(); };
+      clipsIn ? tryHash() : setTimeout(tryHash, 400);
+    } else {
+      const ae = document.activeElement?.id;
+      if (ae === 'askIn' || ae === 'clipTitle' || ae === 'trq') renderRail(); else render();
+    }
+  }, () => { S.ready = true; S.offline = true; render(); });
+})();
+})();
+</script>
