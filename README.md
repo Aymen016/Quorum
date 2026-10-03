@@ -16,9 +16,8 @@ cp .env.example .env   # add GROQ_API_KEY (free at console.groq.com) or ANTHROPI
 npm run dev            # http://localhost:5173
 ```
 
-## Deploy (free)
+## Deploy (free, no card): Vercel
 
-- **Hugging Face Spaces** (no card): create a Docker Space, add [deploy/huggingface/Dockerfile](deploy/huggingface/Dockerfile), and set the `GROQ_API_KEY` secret. The Dockerfile builds straight from this repo.
-- **Render**: `render.yaml` defines the service (Blueprints may ask for a card; a manual free Web Service with root `web` works too).
+On vercel.com: Add New → Project → import this repo → set **Root Directory** to `web` → add the `GROQ_API_KEY` environment variable → Deploy. `web/vercel.json` serves the React build and routes `/api/*` to `web/api/index.mjs`, a bundle of the Express API (rebuild it with `npm run build:vercel` after changing server code).
 
-Free hosts use temporary disks, so calls you add reset when the app restarts.
+Serverless storage is temporary (`/tmp`), so calls you add can reset between visits; the example call is always there. Other configs: `render.yaml` (Render) and `deploy/huggingface/Dockerfile`.

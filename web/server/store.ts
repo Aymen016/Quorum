@@ -8,8 +8,10 @@ import {
 import { escapeRe, segments } from '../src/util.ts';
 import { exampleMeeting, exampleClip, examplePlaylist, exampleAlerts } from './seed.ts';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.resolve(here, '..', 'data');
+// Serverless hosts only allow writing to /tmp (and it is wiped on cold starts).
+const DATA_DIR = process.env.VERCEL
+  ? '/tmp/fathom-data'
+  : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'data');
 const FILE = path.join(DATA_DIR, 'quorum.json');
 
 interface Db {

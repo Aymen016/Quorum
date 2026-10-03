@@ -9,10 +9,12 @@
     "dev:web": "vite",
     "build": "vite build",
     "start": "tsx server/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:vercel": "node scripts/build-vercel.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
+    "@vercel/functions": "^3.9.11",
     "express": "^5.2.1",
     "groq-sdk": "^1.6.0",
     "react": "^18.3.1",
